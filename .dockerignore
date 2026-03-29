@@ -6,6 +6,4 @@ npm-debug.log
 dist
 coverage
 *.local
-.env
-.env.*
 README.md

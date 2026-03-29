@@ -30,16 +30,100 @@ class Logger {
 
 const logger = new Logger('PopupUI');
 
+const DEFAULT_SOCKET_SERVER = 'http://localhost:3000';
+
+function normalizeSocketServer(rawValue) {
+    const value = (rawValue || '').trim();
+    if (!value) {
+        return DEFAULT_SOCKET_SERVER;
+    }
+
+    const withProtocol = /^(https?:\/\/|wss?:\/\/)/i.test(value)
+        ? value
+        : `https://${value}`;
+
+    try {
+        const url = new URL(withProtocol);
+        return url.origin;
+    } catch (error) {
+        throw new Error('Socket Server URL is invalid. Example: https://my-tunnel.example.com');
+    }
+}
+
 const elements = {
     enabled: document.getElementById('enabled'),
     autoReload: document.getElementById('autoReload'),
     reloadInterval: document.getElementById('reloadInterval'),
+    socketServer: document.getElementById('socketServer'),
     clearGrecaptcha: document.getElementById('clearGrecaptcha'),
     saveSettings: document.getElementById('saveSettings'),
+    testConnection: document.getElementById('testConnection'),
     reloadNow: document.getElementById('reloadNow'),
     autoReloadRow: document.getElementById('autoReloadRow'),
-    intervalRow: document.getElementById('intervalRow')
+    intervalRow: document.getElementById('intervalRow'),
+    connectionStatus: document.getElementById('connectionStatus')
 };
+
+function setConnectionStatus(type, message) {
+    elements.connectionStatus.className = `connection-status show ${type}`;
+    elements.connectionStatus.textContent = message;
+}
+
+function toSocketHandshakeUrl(baseUrl) {
+    const url = new URL(baseUrl);
+    const isSecure = url.protocol === 'https:';
+    const wsProtocol = isSecure ? 'wss:' : 'ws:';
+
+    return `${wsProtocol}//${url.host}/socket.io/?EIO=4&transport=websocket`;
+}
+
+function testSocketConnection(baseUrl, timeoutMs = 6000) {
+    return new Promise((resolve, reject) => {
+        let settled = false;
+        let socket = null;
+
+        const finalize = (result, error) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                socket.close();
+            }
+            if (error) reject(error);
+            else resolve(result);
+        };
+
+        const wsUrl = toSocketHandshakeUrl(baseUrl);
+
+        let timer = setTimeout(() => {
+            finalize(null, new Error('Connection timeout (6s).'));
+        }, timeoutMs);
+
+        try {
+            socket = new WebSocket(wsUrl);
+        } catch (error) {
+            finalize(null, new Error('Invalid WebSocket URL or blocked by browser policy.'));
+            return;
+        }
+
+        socket.onmessage = (event) => {
+            const payload = String(event.data || '');
+            if (payload.startsWith('0{')) {
+                finalize({ wsUrl });
+            }
+        };
+
+        socket.onerror = () => {
+            finalize(null, new Error('Could not connect to socket server.'));
+        };
+
+        socket.onclose = () => {
+            if (!settled) {
+                finalize(null, new Error('Socket closed before handshake completed.'));
+            }
+        };
+    });
+}
 
 // Load settings khi popup mở
 async function loadSettings() {
@@ -49,6 +133,7 @@ async function loadSettings() {
     elements.enabled.checked = response.enabled;
     elements.autoReload.checked = response.autoReload;
     elements.reloadInterval.value = response.reloadInterval;
+    elements.socketServer.value = response.socketServer || DEFAULT_SOCKET_SERVER;
     elements.clearGrecaptcha.checked = response.clearGrecaptcha ?? false;
     
     updateUIState();
@@ -56,12 +141,17 @@ async function loadSettings() {
 
 // Save settings khi thay đổi (chỉ lưu, không reload)
 async function saveSettings() {
+    const socketServer = normalizeSocketServer(elements.socketServer.value);
+
     const settings = {
         enabled: elements.enabled.checked,
         autoReload: elements.autoReload.checked,
         reloadInterval: parseInt(elements.reloadInterval.value),
+        socketServer,
         clearGrecaptcha: elements.clearGrecaptcha.checked
     };
+
+    elements.socketServer.value = socketServer;
     
     await chrome.runtime.sendMessage({
         type: 'SAVE_SETTINGS',
@@ -105,7 +195,12 @@ async function saveAndReload() {
             button.disabled = false;
         }, 1000);
     } catch (error) {
+        logger.error('Save failed', error);
         button.innerHTML = '<span>❌</span><span>Error</span>';
+
+        if (error?.message) {
+            alert(error.message);
+        }
         
         setTimeout(() => {
             button.innerHTML = originalHTML;
@@ -161,6 +256,30 @@ elements.saveSettings.addEventListener('click', async () => {
     await saveAndReload();
 });
 
+elements.testConnection.addEventListener('click', async () => {
+    const button = elements.testConnection;
+    const originalHTML = button.innerHTML;
+
+    button.innerHTML = '<span>⏳</span><span>Testing...</span>';
+    button.disabled = true;
+
+    try {
+        const socketServer = normalizeSocketServer(elements.socketServer.value);
+        elements.socketServer.value = socketServer;
+
+        setConnectionStatus('info', 'Testing socket handshake...');
+        await testSocketConnection(socketServer);
+        setConnectionStatus('success', 'Connected successfully. Socket server is reachable.');
+        logger.success('Socket test passed', { socketServer });
+    } catch (error) {
+        setConnectionStatus('error', `Connection failed: ${error.message}`);
+        logger.error('Socket test failed', error);
+    } finally {
+        button.innerHTML = originalHTML;
+        button.disabled = false;
+    }
+});
+
 elements.reloadNow.addEventListener('click', async () => {
     const button = elements.reloadNow;
     const originalHTML = button.innerHTML;
@@ -199,6 +318,14 @@ elements.reloadInterval.addEventListener('input', (e) => {
         e.target.value = 1;
     } else if (value > 60) {
         e.target.value = 60;
+    }
+});
+
+elements.socketServer.addEventListener('blur', () => {
+    try {
+        elements.socketServer.value = normalizeSocketServer(elements.socketServer.value);
+    } catch (error) {
+        logger.warn('Socket server URL is not valid yet');
     }
 });
 

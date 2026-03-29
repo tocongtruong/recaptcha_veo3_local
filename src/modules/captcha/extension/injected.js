@@ -33,9 +33,11 @@
 
     logger.log('🚀 Starting Captcha Client...');
 
+    const DEFAULT_SOCKET_SERVER = 'http://localhost:3000';
+
     const CONFIG = {
         siteKey: '6LdsFiUsAAAAAIjVDZcuLhaHiDn5nnHVXVRQGeMV',
-        socketServer: 'http://localhost:3000', // URL NestJS server
+        socketServer: DEFAULT_SOCKET_SERVER, // URL NestJS server
     };
 
     // Cache settings - lưu để tránh request lặp lại
@@ -93,10 +95,26 @@
                 // Chỉ return defaults, không cache!
                 if (!responseReceived) {
                     logger.warn('Settings request timeout, using defaults (NOT cached)');
-                    resolve({ clearGrecaptcha: false });
+                    resolve({
+                        clearGrecaptcha: false,
+                        socketServer: DEFAULT_SOCKET_SERVER
+                    });
                 }
             }, 2000);
         });
+    }
+
+    function resolveSocketServer(settings) {
+        const value = String(settings?.socketServer || '').trim();
+        if (!value) {
+            return DEFAULT_SOCKET_SERVER;
+        }
+
+        if (/^(https?:\/\/|wss?:\/\/)/i.test(value)) {
+            return value;
+        }
+
+        return `https://${value}`;
     }
 
     // Tạo CSS cho countdown badge
@@ -322,6 +340,12 @@
         logger.log('Loading Socket.IO...');
         sendLog('Loading Socket.IO...');
         const io = await loadSocketIO();
+
+        // Get latest settings before connecting socket
+        const settings = await getSettings();
+        CONFIG.socketServer = resolveSocketServer(settings);
+        logger.log('Socket server configured', CONFIG.socketServer);
+        sendLog('Socket server: ' + CONFIG.socketServer);
 
         // Connect to server
         logger.log('Connecting to server...');

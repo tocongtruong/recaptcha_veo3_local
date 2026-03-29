@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   captcha-solver-api:
     container_name: captcha-solver-api
@@ -7,8 +5,18 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "3000:3000"
+      - "${API_PORT:-3000}:3000"
     environment:
       NODE_ENV: production
-      API_PORT: 3000
+      API_PORT: ${API_PORT:-3000}
     restart: unless-stopped
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: captcha-cloudflared-tunnel
+    command: tunnel --no-autoupdate run --token ${TUNNEL_TOKEN}
+    # Share network with API so Cloudflare origin http://localhost:3000 works reliably
+    network_mode: "service:captcha-solver-api"
+    restart: unless-stopped
+    depends_on:
+      - captcha-solver-api

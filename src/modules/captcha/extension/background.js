@@ -9,6 +9,7 @@ const DEFAULT_SETTINGS = {
     autoReload: true,
     reloadInterval: 5, // minutes
     enabled: true,
+    socketServer: 'http://localhost:3000',
     clearGrecaptcha: false // New setting
 };
 
