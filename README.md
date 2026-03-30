@@ -3,7 +3,8 @@ Project này dùng để giải captcha veo3 bằng cách chạy một browser (
 - Server: nhận request giải captcha
 - Extension: kết nối socket tới server để thực hiện giải captcha và gửi kết quả trả về server
 
-> **⚠️ QUAN TRỌNG**: Để đảm bảo giải captcha ổn định, cần sử dụng proxy xoay (nên ít nhất 15 giây xoay một lần). Bạn có thể setup proxy global cho toàn máy hoặc dùng extension để thêm proxy.
+> **⚠️ Lưu ý 1**: Để đảm bảo giải captcha ổn định, cần sử dụng proxy xoay (nên ít nhất 15 giây xoay một lần). Bạn có thể setup proxy global cho toàn máy hoặc dùng extension để thêm proxy.
+> **⚠️ Lưu ý 2**: Truy cập chính xác vào trang web: `https://labs.google/fx/vi/tools/flow` để sử dụng mới lấy được recaptcha. Nếu không sẽ bị trả về lỗi: "Internal server error"
 
 ## Các bước thực hiện
 
