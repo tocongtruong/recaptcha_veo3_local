@@ -1,6 +1,6 @@
 services:
-  captcha-solver-api:
-    container_name: captcha-solver-api
+  captcha-veo3-local:
+    container_name: captcha-api
     build:
       context: .
       dockerfile: Dockerfile
@@ -13,10 +13,10 @@ services:
 
   cloudflared:
     image: cloudflare/cloudflared:latest
-    container_name: captcha-cloudflared-tunnel
+    container_name: cloudflared-tunnel
     command: tunnel --no-autoupdate run --token ${TUNNEL_TOKEN}
     # Share network with API so Cloudflare origin http://localhost:3000 works reliably
-    network_mode: "service:captcha-solver-api"
+    network_mode: "service:captcha-veo3-local"
     restart: unless-stopped
     depends_on:
-      - captcha-solver-api
+      - captcha-veo3-local
